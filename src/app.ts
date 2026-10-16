@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import { config } from './config/environment';
 import { RepositoryContainer, getRepositories } from './repositories';
 import { createAuthRouter } from './modules/auth/auth.routes';
+import { createUserRouter, createAdminRouter } from './modules/users/user.routes';
 
 export const createApp = (customRepos?: RepositoryContainer): Application => {
   const app = express();
@@ -46,8 +47,10 @@ export const createApp = (customRepos?: RepositoryContainer): Application => {
     });
   });
 
-  // Mount Auth Router
+  // Mount API Routers
   app.use('/api/auth', createAuthRouter(repos));
+  app.use('/api/users', createUserRouter(repos));
+  app.use('/api/admin', createAdminRouter(repos));
 
   // Centralized Error Handler
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
