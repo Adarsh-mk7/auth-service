@@ -28,7 +28,7 @@
   "author": "Adarsh-mk7",
   "license": "MIT",
   "dependencies": {
-    "@prisma/client": "^5.22.0",
+    "@prisma/client": "5.22.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
@@ -55,7 +55,7 @@
     "@types/supertest": "^6.0.2",
     "@types/swagger-ui-express": "^4.1.7",
     "@types/yamljs": "^0.2.34",
-    "prisma": "^5.22.0",
+    "prisma": "5.22.0",
     "rimraf": "^6.0.1",
     "supertest": "^7.0.0",
     "ts-node-dev": "^2.0.0",
