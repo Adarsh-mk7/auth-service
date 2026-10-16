@@ -3,7 +3,8 @@ import { AuthController } from './auth.controller';
 import { AuthService } from '../../services/auth.service';
 import { RepositoryContainer, getRepositories } from '../../repositories';
 import { validate } from '../../middleware/validate';
-import { registerSchema } from '../../validators/auth.validator';
+import { authenticate } from '../../middleware/authenticate';
+import { registerSchema, loginSchema } from '../../validators/auth.validator';
 
 export const createAuthRouter = (repos?: RepositoryContainer): Router => {
   const router = Router();
@@ -13,6 +14,15 @@ export const createAuthRouter = (repos?: RepositoryContainer): Router => {
 
   // POST /api/auth/register
   router.post('/register', validate(registerSchema), authController.register);
+
+  // POST /api/auth/login
+  router.post('/login', validate(loginSchema), authController.login);
+
+  // POST /api/auth/refresh
+  router.post('/refresh', authController.refresh);
+
+  // GET /api/auth/me
+  router.get('/me', authenticate as any, authController.getMe as any);
 
   return router;
 };
