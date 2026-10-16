@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../../services/auth.service';
 import { SessionService } from '../../services/session.service';
+import { PasswordService } from '../../services/password.service';
 import { setRefreshTokenCookie, clearRefreshTokenCookie, REFRESH_TOKEN_COOKIE_NAME } from '../../utils/cookie';
 import { AuthenticatedRequest } from '../../types';
 import { UnauthorizedError } from '../../utils/errors';
@@ -8,7 +9,8 @@ import { UnauthorizedError } from '../../utils/errors';
 export class AuthController {
   constructor(
     private authService: AuthService,
-    private sessionService: SessionService
+    private sessionService: SessionService,
+    private passwordService: PasswordService
   ) {}
 
   register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -153,6 +155,69 @@ export class AuthController {
         success: true,
         message: 'User profile retrieved successfully',
         data: { user },
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  forgotPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+
+      const result = await this.passwordService.forgotPassword(req.body.email, ipAddress, userAgent);
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  resetPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+
+      const result = await this.passwordService.resetPassword(
+        req.body.token,
+        req.body.newPassword,
+        ipAddress,
+        userAgent
+      );
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  changePassword = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.user) {
+        throw new UnauthorizedError('Authentication required');
+      }
+
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+
+      const result = await this.passwordService.changePassword(
+        req.user.id,
+        req.body.currentPassword,
+        req.body.newPassword,
+        ipAddress,
+        userAgent
+      );
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
       });
     } catch (error) {
       next(error);
