@@ -1,11 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from '../../services/auth.service';
-import { setRefreshTokenCookie, REFRESH_TOKEN_COOKIE_NAME } from '../../utils/cookie';
+import { SessionService } from '../../services/session.service';
+import { setRefreshTokenCookie, clearRefreshTokenCookie, REFRESH_TOKEN_COOKIE_NAME } from '../../utils/cookie';
 import { AuthenticatedRequest } from '../../types';
 import { UnauthorizedError } from '../../utils/errors';
 
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private sessionService: SessionService
+  ) {}
 
   register = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -49,7 +53,6 @@ export class AuthController {
 
   refresh = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      // Refresh token can come from signed/unsigned cookie or request body as fallback
       const rawToken = req.cookies?.[REFRESH_TOKEN_COOKIE_NAME] || req.body?.refreshToken;
 
       if (!rawToken) {
@@ -71,6 +74,67 @@ export class AuthController {
           user: result.user,
           accessToken: result.accessToken,
         },
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  logout = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const rawToken = req.cookies?.[REFRESH_TOKEN_COOKIE_NAME] || req.body?.refreshToken;
+      const userId = req.user?.id;
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+
+      await this.sessionService.logout(rawToken, userId, ipAddress, userAgent);
+
+      clearRefreshTokenCookie(res);
+
+      res.status(200).json({
+        success: true,
+        message: 'Logged out successfully',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  logoutAll = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.user) {
+        throw new UnauthorizedError('Authentication required');
+      }
+
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+
+      await this.sessionService.logoutAll(req.user.id, ipAddress, userAgent);
+
+      clearRefreshTokenCookie(res);
+
+      res.status(200).json({
+        success: true,
+        message: 'All active sessions have been revoked',
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getSessions = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!req.user) {
+        throw new UnauthorizedError('Authentication required');
+      }
+
+      const rawToken = req.cookies?.[REFRESH_TOKEN_COOKIE_NAME] || req.body?.refreshToken;
+      const sessions = await this.sessionService.getActiveSessions(req.user.id, rawToken);
+
+      res.status(200).json({
+        success: true,
+        message: 'Active sessions retrieved successfully',
+        data: { sessions },
       });
     } catch (error) {
       next(error);
