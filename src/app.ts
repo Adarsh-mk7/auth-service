@@ -2,9 +2,13 @@ import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import path from 'path';
+import fs from 'fs';
+import yaml from 'yamljs';
+import swaggerUi from 'swagger-ui-express';
 import { config } from './config/environment';
 import { RepositoryContainer, getRepositories } from './repositories';
-import { createAuthRouter, AuthRouteOptions } from './modules/auth/auth.routes';
+import { createAuthRouter } from './modules/auth/auth.routes';
 import { createUserRouter, createAdminRouter } from './modules/users/user.routes';
 import { createRateLimiter } from './middleware/rateLimiter';
 
@@ -34,13 +38,13 @@ export const createApp = (optionsOrRepos?: RepositoryContainer | CreateAppOption
     repos = getRepositories();
   }
 
-  // Helmet Security Headers
+  // Helmet Security Headers (adjusted to allow Swagger UI resources)
   app.use(
     helmet({
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
           imgSrc: ["'self'", 'data:'],
         },
@@ -103,6 +107,17 @@ export const createApp = (optionsOrRepos?: RepositoryContainer | CreateAppOption
       service: 'auth-service',
     });
   });
+
+  // OpenAPI / Swagger Documentation endpoint
+  const openApiPath = path.resolve(process.cwd(), 'docs/openapi.yaml');
+  if (fs.existsSync(openApiPath)) {
+    try {
+      const swaggerDoc = yaml.load(openApiPath);
+      app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDoc));
+    } catch (e) {
+      console.warn('Could not load OpenAPI specification for /api/docs');
+    }
+  }
 
   // Mount API Routers
   app.use('/api/auth', createAuthRouter({ repos, rateLimits }));
