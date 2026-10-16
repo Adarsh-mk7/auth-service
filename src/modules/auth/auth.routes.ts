@@ -6,7 +6,9 @@ import { PasswordService } from '../../services/password.service';
 import { RepositoryContainer, getRepositories } from '../../repositories';
 import { validate } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
+import { createRateLimiter } from '../../middleware/rateLimiter';
 import { createOAuthRouter } from '../oauth/oauth.routes';
+import { config } from '../../config/environment';
 import {
   registerSchema,
   loginSchema,
@@ -15,22 +17,66 @@ import {
   changePasswordSchema,
 } from '../../validators/auth.validator';
 
-export const createAuthRouter = (repos?: RepositoryContainer): Router => {
+export interface AuthRouteOptions {
+  repos?: RepositoryContainer;
+  rateLimits?: {
+    loginMax?: number;
+    registerMax?: number;
+    forgotPasswordMax?: number;
+    refreshMax?: number;
+  };
+}
+
+export const createAuthRouter = (options?: AuthRouteOptions): Router => {
   const router = Router();
-  const repositoryContainer = repos || getRepositories();
+  const repositoryContainer = options?.repos || getRepositories();
   const authService = new AuthService(repositoryContainer);
   const sessionService = new SessionService(repositoryContainer);
   const passwordService = new PasswordService(repositoryContainer);
   const authController = new AuthController(authService, sessionService, passwordService);
 
+  const isTest = config.NODE_ENV === 'test';
+  const loginMax = options?.rateLimits?.loginMax ?? (isTest ? 500 : config.RATE_LIMIT_AUTH_MAX_REQUESTS);
+  const registerMax = options?.rateLimits?.registerMax ?? (isTest ? 500 : 10);
+  const forgotPwMax = options?.rateLimits?.forgotPasswordMax ?? (isTest ? 500 : 5);
+  const refreshMax = options?.rateLimits?.refreshMax ?? (isTest ? 500 : 50);
+
+  // Rate Limiters for sensitive authentication endpoints
+  const loginLimiter = createRateLimiter({
+    prefix: 'login',
+    windowMs: config.RATE_LIMIT_WINDOW_MS,
+    max: loginMax,
+    message: 'Too many login attempts. Please try again later.',
+  });
+
+  const registerLimiter = createRateLimiter({
+    prefix: 'register',
+    windowMs: 60 * 60 * 1000,
+    max: registerMax,
+    message: 'Too many registration requests from this IP. Please try again later.',
+  });
+
+  const forgotPasswordLimiter = createRateLimiter({
+    prefix: 'forgot-pw',
+    windowMs: 60 * 60 * 1000,
+    max: forgotPwMax,
+    message: 'Too many password reset attempts. Please try again later.',
+  });
+
+  const refreshLimiter = createRateLimiter({
+    prefix: 'refresh',
+    windowMs: config.RATE_LIMIT_WINDOW_MS,
+    max: refreshMax,
+  });
+
   // POST /api/auth/register
-  router.post('/register', validate(registerSchema), authController.register);
+  router.post('/register', registerLimiter, validate(registerSchema), authController.register);
 
   // POST /api/auth/login
-  router.post('/login', validate(loginSchema), authController.login);
+  router.post('/login', loginLimiter, validate(loginSchema), authController.login);
 
   // POST /api/auth/refresh
-  router.post('/refresh', authController.refresh);
+  router.post('/refresh', refreshLimiter, authController.refresh);
 
   // POST /api/auth/logout
   router.post('/logout', authController.logout as any);
@@ -45,7 +91,7 @@ export const createAuthRouter = (repos?: RepositoryContainer): Router => {
   router.get('/me', authenticate as any, authController.getMe as any);
 
   // POST /api/auth/forgot-password
-  router.post('/forgot-password', validate(forgotPasswordSchema), authController.forgotPassword);
+  router.post('/forgot-password', forgotPasswordLimiter, validate(forgotPasswordSchema), authController.forgotPassword);
 
   // POST /api/auth/reset-password
   router.post('/reset-password', validate(resetPasswordSchema), authController.resetPassword);
