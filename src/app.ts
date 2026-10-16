@@ -3,9 +3,12 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { config } from './config/environment';
+import { RepositoryContainer, getRepositories } from './repositories';
+import { createAuthRouter } from './modules/auth/auth.routes';
 
-export const createApp = (): Application => {
+export const createApp = (customRepos?: RepositoryContainer): Application => {
   const app = express();
+  const repos = customRepos || getRepositories();
 
   // Security Headers
   app.use(helmet());
@@ -15,7 +18,6 @@ export const createApp = (): Application => {
   app.use(
     cors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (e.g. mobile apps, curl, postman)
         if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
           callback(null, true);
         } else {
@@ -44,6 +46,9 @@ export const createApp = (): Application => {
     });
   });
 
+  // Mount Auth Router
+  app.use('/api/auth', createAuthRouter(repos));
+
   // Centralized Error Handler
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     const statusCode = err.statusCode || (err.status ? Number(err.status) : 500);
@@ -52,6 +57,7 @@ export const createApp = (): Application => {
     res.status(statusCode).json({
       success: false,
       message: isProduction && statusCode === 500 ? 'Internal server error' : err.message || 'An error occurred',
+      ...(err.errors ? { errors: err.errors } : {}),
       ...(isProduction ? {} : { stack: err.stack }),
     });
   });
