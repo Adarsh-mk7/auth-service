@@ -6,6 +6,7 @@ import { PasswordService } from '../../services/password.service';
 import { RepositoryContainer, getRepositories } from '../../repositories';
 import { validate } from '../../middleware/validate';
 import { authenticate } from '../../middleware/authenticate';
+import { createOAuthRouter } from '../oauth/oauth.routes';
 import {
   registerSchema,
   loginSchema,
@@ -51,6 +52,9 @@ export const createAuthRouter = (repos?: RepositoryContainer): Router => {
 
   // POST /api/auth/change-password
   router.post('/change-password', authenticate as any, validate(changePasswordSchema), authController.changePassword as any);
+
+  // Mount OAuth routes: /api/auth/google and /api/auth/google/callback
+  router.use('/', createOAuthRouter(repositoryContainer));
 
   return router;
 };
